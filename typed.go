@@ -7,12 +7,14 @@ import (
 	"io/ioutil"
 	"strconv"
 	"time"
+	"fmt"
 )
 
 var (
 	// Used by ToBytes to indicate that the key was not
 	// present in the type
 	KeyNotFound = errors.New("Key not found")
+	FromatErrNotSupportedType = "LoadFrom: not supported type %T"
 	Empty       = Typed(nil)
 )
 
@@ -848,6 +850,43 @@ func (t Typed) MustBytes(key string) []byte {
 func (t Typed) Exists(key string) bool {
 	_, exists := t[key]
 	return exists
+}
+
+func (t *Typed) LoadFrom(d interface{}) (*Typed, error) {
+	switch v.(type) {
+	case map[string]interface{}:
+		for key, value := range v.(map[string]interface{}) {
+			t.Set(key, value)
+		}
+	case *Typed:
+		for key, value := range *v.(*Typed) {
+			t.Set(key, value)
+		}
+	case Typed:
+		for key, value := range v.(Typed) {
+			t.Set(key, value)
+		}
+	default:
+		return t, fmt.Errorf(FromatErrNotSupportedType, d)
+	}
+
+	return t, nil
+}
+
+func (t *Typed) Remove(key string) *Typed {
+	if !t.Exists(k) {
+		return t
+	}
+	
+	delete((*t), key)
+	
+	return t
+}
+
+func (t *Typed) Set(key string, v interface{}) *Typed {
+	(*t)[key] = v
+
+	return m
 }
 
 func (t Typed) getmap(key string) (raw map[string]interface{}, exists bool) {
