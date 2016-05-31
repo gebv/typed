@@ -852,7 +852,7 @@ func (t Typed) Exists(key string) bool {
 	return exists
 }
 
-func (t *Typed) LoadFrom(d interface{}) (*Typed, error) {
+func (t *Typed) LoadFrom(v interface{}) (*Typed, error) {
 	switch v.(type) {
 	case map[string]interface{}:
 		for key, value := range v.(map[string]interface{}) {
@@ -867,14 +867,14 @@ func (t *Typed) LoadFrom(d interface{}) (*Typed, error) {
 			t.Set(key, value)
 		}
 	default:
-		return t, fmt.Errorf(FromatErrNotSupportedType, d)
+		return t, fmt.Errorf(FromatErrNotSupportedType, v)
 	}
 
 	return t, nil
 }
 
 func (t *Typed) Remove(key string) *Typed {
-	if !t.Exists(k) {
+	if !t.Exists(key) {
 		return t
 	}
 	
@@ -886,7 +886,7 @@ func (t *Typed) Remove(key string) *Typed {
 func (t *Typed) Set(key string, v interface{}) *Typed {
 	(*t)[key] = v
 
-	return m
+	return t
 }
 
 func (t Typed) getmap(key string) (raw map[string]interface{}, exists bool) {
