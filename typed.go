@@ -22,28 +22,29 @@ var (
 type Typed map[string]interface{}
 
 // Wrap the map into a Typed
-func New(m map[string]interface{}) Typed {
-	return Typed(m)
+func New(m map[string]interface{}) *Typed {
+	_m := Typed(m)
+	return &_m 
 }
 
 // Create a Typed helper from the given JSON bytes
-func Json(data []byte) (Typed, error) {
+func Json(data []byte) (*Typed, error) {
 	var m map[string]interface{}
 	err := json.Unmarshal(data, &m)
-	return Typed(m), err
+	return New(m), err
 }
 
 // Create a Typed helper from the given JSON bytes, panics on error
-func Must(data []byte) Typed {
+func Must(data []byte) *Typed {
 	var m map[string]interface{}
 	if err := json.Unmarshal(data, &m); err != nil {
 		panic(err)
 	}
-	return Typed(m)
+	return New(m)
 }
 
 // Create a Typed helper from the given JSON stream
-func JsonReader(reader io.Reader) (Typed, error) {
+func JsonReader(reader io.Reader) (*Typed, error) {
 	if data, err := ioutil.ReadAll(reader); err != nil {
 		return nil, err
 	} else {
@@ -52,12 +53,12 @@ func JsonReader(reader io.Reader) (Typed, error) {
 }
 
 // Create a Typed helper from the given JSON string
-func JsonString(data string) (Typed, error) {
+func JsonString(data string) (*Typed, error) {
 	return Json([]byte(data))
 }
 
 // Create a Typed helper from the JSON within a file
-func JsonFile(path string) (Typed, error) {
+func JsonFile(path string) (*Typed, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func JsonFile(path string) (Typed, error) {
 
 // Create an array of Typed helpers
 // Used for when the root is an array which contains objects
-func JsonArray(data []byte) ([]Typed, error) {
+func JsonArray(data []byte) ([]*Typed, error) {
 	var m []interface{}
 	err := json.Unmarshal(data, &m)
 	if err != nil {
@@ -77,13 +78,13 @@ func JsonArray(data []byte) ([]Typed, error) {
 	if l == 0 {
 		return nil, nil
 	}
-	typed := make([]Typed, l)
+	typed := make([]*Typed, l)
 	for i := 0; i < l; i++ {
 		value := m[i]
 		if t, ok := value.(map[string]interface{}); ok {
-			typed[i] = t
+			typed[i] = New(t)
 		} else {
-			typed[i] = map[string]interface{}{"0": value}
+			typed[i] = New(map[string]interface{}{"0": value})
 		}
 	}
 	return typed, nil
@@ -91,13 +92,13 @@ func JsonArray(data []byte) ([]Typed, error) {
 
 // Create an array of Typed helpers from a string
 // Used for when the root is an array which contains objects
-func JsonStringArray(data string) ([]Typed, error) {
+func JsonStringArray(data string) ([]*Typed, error) {
 	return JsonArray([]byte(data))
 }
 
 // Create an array of Typed helpers from a file
 // Used for when the root is an array which contains objects
-func JsonFileArray(path string) ([]Typed, error) {
+func JsonFileArray(path string) ([]*Typed, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -115,15 +116,30 @@ func (t Typed) Keys() []string {
 	return keys
 }
 
+func (t *Typed) Get(key string) interface{} {
+	v, exists := t.GetIf(key)
+	
+	if !exists {
+		return nil
+	}
+	
+	return v
+}
+
+func (t *Typed) GetIf(key string) (interface{}, bool) {
+	v, exists := (*t)[key]
+	return v, exists
+} 
+
 // Returns a boolean at the key, or false if it
 // doesn't exist, or if it isn't a bool
-func (t Typed) Bool(key string) bool {
+func (t *Typed) Bool(key string) bool {
 	return t.BoolOr(key, false)
 }
 
 // Returns a boolean at the key, or the specified
 // value if it doesn't exist or isn't a bool
-func (t Typed) BoolOr(key string, d bool) bool {
+func (t *Typed) BoolOr(key string, d bool) bool {
 	if value, exists := t.BoolIf(key); exists {
 		return value
 	}
@@ -131,7 +147,7 @@ func (t Typed) BoolOr(key string, d bool) bool {
 }
 
 // Returns a bool or panics
-func (t Typed) BoolMust(key string) bool {
+func (t *Typed) BoolMust(key string) bool {
 	b, exists := t.BoolIf(key)
 	if exists == false {
 		panic("expected boolean value for " + key)
@@ -141,8 +157,8 @@ func (t Typed) BoolMust(key string) bool {
 
 // Returns a boolean at the key and whether
 // or not the key existed and the value was a bolean
-func (t Typed) BoolIf(key string) (bool, bool) {
-	value, exists := t[key]
+func (t *Typed) BoolIf(key string) (bool, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return false, false
 	}
@@ -152,13 +168,13 @@ func (t Typed) BoolIf(key string) (bool, bool) {
 	return false, false
 }
 
-func (t Typed) Int(key string) int {
+func (t *Typed) Int(key string) int {
 	return t.IntOr(key, 0)
 }
 
 // Returns a int at the key, or the specified
 // value if it doesn't exist or isn't a int
-func (t Typed) IntOr(key string, d int) int {
+func (t *Typed) IntOr(key string, d int) int {
 	if value, exists := t.IntIf(key); exists {
 		return value
 	}
@@ -166,7 +182,7 @@ func (t Typed) IntOr(key string, d int) int {
 }
 
 // Returns an int or panics
-func (t Typed) IntMust(key string) int {
+func (t *Typed) IntMust(key string) int {
 	i, exists := t.IntIf(key)
 	if exists == false {
 		panic("expected int value for " + key)
@@ -176,22 +192,34 @@ func (t Typed) IntMust(key string) int {
 
 // Returns an int at the key and whether
 // or not the key existed and the value was an int
-func (t Typed) IntIf(key string) (int, bool) {
-	value, exists := t[key]
+func (t *Typed) IntIf(key string) (int, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return 0, false
 	}
 
 	switch t := value.(type) {
 	case int:
-		return t, true
+		return int(t), true
 	case int16:
 		return int(t), true
 	case int32:
 		return int(t), true
 	case int64:
 		return int(t), true
+	case uint:
+		return int(t), true
+	case uint8:
+		return int(t), true
+	case uint16:
+		return int(t), true
+	case uint32:
+		return int(t), true
+	case uint64:
+		return int(t), true
 	case float64:
+		return int(t), true
+	case float32:
 		return int(t), true
 	case string:
 		i, err := strconv.Atoi(t)
@@ -200,13 +228,13 @@ func (t Typed) IntIf(key string) (int, bool) {
 	return 0, false
 }
 
-func (t Typed) Float(key string) float64 {
+func (t *Typed) Float(key string) float64 {
 	return t.FloatOr(key, 0)
 }
 
 // Returns a float at the key, or the specified
 // value if it doesn't exist or isn't a float
-func (t Typed) FloatOr(key string, d float64) float64 {
+func (t *Typed) FloatOr(key string, d float64) float64 {
 	if value, exists := t.FloatIf(key); exists {
 		return value
 	}
@@ -214,7 +242,7 @@ func (t Typed) FloatOr(key string, d float64) float64 {
 }
 
 // Returns an float or panics
-func (t Typed) FloatMust(key string) float64 {
+func (t *Typed) FloatMust(key string) float64 {
 	f, exists := t.FloatIf(key)
 	if exists == false {
 		panic("expected float value for " + key)
@@ -224,14 +252,16 @@ func (t Typed) FloatMust(key string) float64 {
 
 // Returns an float at the key and whether
 // or not the key existed and the value was an float
-func (t Typed) FloatIf(key string) (float64, bool) {
-	value, exists := t[key]
+func (t *Typed) FloatIf(key string) (float64, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return 0, false
 	}
 	switch t := value.(type) {
+	case float32:
+		return float64(t), true
 	case float64:
-		return t, true
+		return float64(t), true
 	case string:
 		f, err := strconv.ParseFloat(t, 10)
 		return f, err == nil
@@ -239,13 +269,13 @@ func (t Typed) FloatIf(key string) (float64, bool) {
 	return 0, false
 }
 
-func (t Typed) String(key string) string {
+func (t *Typed) String(key string) string {
 	return t.StringOr(key, "")
 }
 
 // Returns a string at the key, or the specified
 // value if it doesn't exist or isn't a string
-func (t Typed) StringOr(key string, d string) string {
+func (t *Typed) StringOr(key string, d string) string {
 	if value, exists := t.StringIf(key); exists {
 		return value
 	}
@@ -253,7 +283,7 @@ func (t Typed) StringOr(key string, d string) string {
 }
 
 // Returns an string or panics
-func (t Typed) StringMust(key string) string {
+func (t *Typed) StringMust(key string) string {
 	s, exists := t.StringIf(key)
 	if exists == false {
 		panic("expected string value for " + key)
@@ -263,8 +293,8 @@ func (t Typed) StringMust(key string) string {
 
 // Returns an string at the key and whether
 // or not the key existed and the value was an string
-func (t Typed) StringIf(key string) (string, bool) {
-	value, exists := t[key]
+func (t *Typed) StringIf(key string) (string, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return "", false
 	}
@@ -274,13 +304,13 @@ func (t Typed) StringIf(key string) (string, bool) {
 	return "", false
 }
 
-func (t Typed) Time(key string) time.Time {
+func (t *Typed) Time(key string) time.Time {
 	return t.TimeOr(key, time.Now())
 }
 
 // Returns a time at the key, or the specified
 // value if it doesn't exist or isn't a time
-func (t Typed) TimeOr(key string, d time.Time) time.Time {
+func (t *Typed) TimeOr(key string, d time.Time) time.Time {
 	if value, exists := t.TimeIf(key); exists {
 		return value
 	}
@@ -288,7 +318,7 @@ func (t Typed) TimeOr(key string, d time.Time) time.Time {
 }
 
 // Returns a time.Time or panics
-func (t Typed) TimeMust(key string) time.Time {
+func (t *Typed) TimeMust(key string) time.Time {
 	tt, exists := t.TimeIf(key)
 	if exists == false {
 		panic("expected time.Time value for " + key)
@@ -298,8 +328,8 @@ func (t Typed) TimeMust(key string) time.Time {
 
 // Returns an time.time at the key and whether
 // or not the key existed and the value was a time.Time
-func (t Typed) TimeIf(key string) (time.Time, bool) {
-	value, exists := t[key]
+func (t *Typed) TimeIf(key string) (time.Time, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return time.Time{}, false
 	}
@@ -313,26 +343,30 @@ func (t Typed) TimeIf(key string) (time.Time, bool) {
 // If the key doesn't exist, a default Typed helper
 // is returned (which will return default values for
 // any subsequent sub queries)
-func (t Typed) Object(key string) Typed {
+func (t *Typed) Object(key string) *Typed {
 	o := t.ObjectOr(key, nil)
 	if o == nil {
-		return Typed(nil)
+		return New(nil)
 	}
 	return o
+}
+
+func (t Typed) Len() int {
+	return len(t) 
 }
 
 // Returns a Typed helper at the key or the specified
 // default if the key doesn't exist or if the key isn't
 // a map[string]interface{}
-func (t Typed) ObjectOr(key string, d map[string]interface{}) Typed {
+func (t *Typed) ObjectOr(key string, d map[string]interface{}) *Typed {
 	if value, exists := t.ObjectIf(key); exists {
 		return value
 	}
-	return Typed(d)
+	return New(d)
 }
 
 // Returns an typed object or panics
-func (t Typed) ObjectMust(key string) Typed {
+func (t *Typed) ObjectMust(key string) *Typed {
 	t, exists := t.ObjectIf(key)
 	if exists == false {
 		panic("expected map for " + key)
@@ -342,27 +376,29 @@ func (t Typed) ObjectMust(key string) Typed {
 
 // Returns a Typed helper at the key and whether
 // or not the key existed and the value was an map[string]interface{}
-func (t Typed) ObjectIf(key string) (Typed, bool) {
-	value, exists := t[key]
+func (t *Typed) ObjectIf(key string) (*Typed, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
 	switch t := value.(type) {
 	case map[string]interface{}:
-		return Typed(t), true
-	case Typed:
+		return New(t), true
+	case *Typed:
 		return t, true
+	case Typed:
+		return &t, true
 	}
 	return nil, false
 }
 
-func (t Typed) Interface(key string) interface{} {
+func (t *Typed) Interface(key string) interface{} {
 	return t.InterfaceOr(key, nil)
 }
 
 // Returns a string at the key, or the specified
 // value if it doesn't exist or isn't a strin
-func (t Typed) InterfaceOr(key string, d interface{}) interface{} {
+func (t *Typed) InterfaceOr(key string, d interface{}) interface{} {
 	if value, exists := t.InterfaceIf(key); exists {
 		return value
 	}
@@ -370,7 +406,7 @@ func (t Typed) InterfaceOr(key string, d interface{}) interface{} {
 }
 
 // Returns an interface or panics
-func (t Typed) InterfaceMust(key string) interface{} {
+func (t *Typed) InterfaceMust(key string) interface{} {
 	i, exists := t.InterfaceIf(key)
 	if exists == false {
 		panic("expected map for " + key)
@@ -380,8 +416,8 @@ func (t Typed) InterfaceMust(key string) interface{} {
 
 // Returns an string at the key and whether
 // or not the key existed and the value was an string
-func (t Typed) InterfaceIf(key string) (interface{}, bool) {
-	value, exists := t[key]
+func (t *Typed) InterfaceIf(key string) (interface{}, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -391,14 +427,14 @@ func (t Typed) InterfaceIf(key string) (interface{}, bool) {
 // Returns a map[string]interface{} at the key
 // or a nil map if the key doesn't exist or if the key isn't
 // a map[string]interface
-func (t Typed) Map(key string) map[string]interface{} {
+func (t *Typed) Map(key string) map[string]interface{} {
 	return t.MapOr(key, nil)
 }
 
 // Returns a map[string]interface{} at the key
 // or the specified default if the key doesn't exist
 // or if the key isn't a map[string]interface
-func (t Typed) MapOr(key string, d map[string]interface{}) map[string]interface{} {
+func (t *Typed) MapOr(key string, d map[string]interface{}) map[string]interface{} {
 	if value, exists := t.MapIf(key); exists {
 		return value
 	}
@@ -407,8 +443,8 @@ func (t Typed) MapOr(key string, d map[string]interface{}) map[string]interface{
 
 // Returns a map[string]interface at the key and whether
 // or not the key existed and the value was an map[string]interface{}
-func (t Typed) MapIf(key string) (map[string]interface{}, bool) {
-	value, exists := t[key]
+func (t *Typed) MapIf(key string) (map[string]interface{}, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -419,12 +455,12 @@ func (t Typed) MapIf(key string) (map[string]interface{}, bool) {
 }
 
 // Returns an slice of boolean, or an nil slice
-func (t Typed) Bools(key string) []bool {
+func (t *Typed) Bools(key string) []bool {
 	return t.BoolsOr(key, nil)
 }
 
 // Returns an slice of boolean, or the specified slice
-func (t Typed) BoolsOr(key string, d []bool) []bool {
+func (t *Typed) BoolsOr(key string, d []bool) []bool {
 	n, ok := t.BoolsIf(key)
 	if ok {
 		return n
@@ -435,8 +471,8 @@ func (t Typed) BoolsOr(key string, d []bool) []bool {
 // Returns a boolean slice + true if valid
 // Returns nil + false otherwise
 // (returns nil+false if one of the values is not a valid boolean)
-func (t Typed) BoolsIf(key string) ([]bool, bool) {
-	value, exists := t[key]
+func (t *Typed) BoolsIf(key string) ([]bool, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -460,7 +496,7 @@ func (t Typed) BoolsIf(key string) ([]bool, bool) {
 // Returns an slice of ints, or the specified slice
 // Some conversion is done to handle the fact that JSON ints
 // are represented as floats.
-func (t Typed) Ints(key string) []int {
+func (t *Typed) Ints(key string) []int {
 	return t.IntsOr(key, nil)
 }
 
@@ -468,7 +504,7 @@ func (t Typed) Ints(key string) []int {
 // if the key doesn't exist or isn't a valid []int.
 // Some conversion is done to handle the fact that JSON ints
 // are represented as floats.
-func (t Typed) IntsOr(key string, d []int) []int {
+func (t *Typed) IntsOr(key string, d []int) []int {
 	n, ok := t.IntsIf(key)
 	if ok {
 		return n
@@ -479,8 +515,8 @@ func (t Typed) IntsOr(key string, d []int) []int {
 // Returns a int slice + true if valid
 // Returns nil + false otherwise
 // (returns nil+false if one of the values is not a valid int)
-func (t Typed) IntsIf(key string) ([]int, bool) {
-	value, exists := t[key]
+func (t *Typed) IntsIf(key string) ([]int, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -518,7 +554,7 @@ func (t Typed) IntsIf(key string) ([]int, bool) {
 // Returns an slice of ints64, or the specified slice
 // Some conversion is done to handle the fact that JSON ints
 // are represented as floats.
-func (t Typed) Ints64(key string) []int64 {
+func (t *Typed) Ints64(key string) []int64 {
 	return t.Ints64Or(key, nil)
 }
 
@@ -526,7 +562,7 @@ func (t Typed) Ints64(key string) []int64 {
 // if the key doesn't exist or isn't a valid []int.
 // Some conversion is done to handle the fact that JSON ints
 // are represented as floats.
-func (t Typed) Ints64Or(key string, d []int64) []int64 {
+func (t *Typed) Ints64Or(key string, d []int64) []int64 {
 	n, ok := t.Ints64If(key)
 	if ok {
 		return n
@@ -537,8 +573,8 @@ func (t Typed) Ints64Or(key string, d []int64) []int64 {
 // Returns a boolean slice + true if valid
 // Returns nil + false otherwise
 // (returns nil+false if one of the values is not a valid boolean)
-func (t Typed) Ints64If(key string) ([]int64, bool) {
-	value, exists := t[key]
+func (t *Typed) Ints64If(key string) ([]int64, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -576,13 +612,13 @@ func (t Typed) Ints64If(key string) ([]int64, bool) {
 }
 
 // Returns an slice of floats, or a nil slice
-func (t Typed) Floats(key string) []float64 {
+func (t *Typed) Floats(key string) []float64 {
 	return t.FloatsOr(key, nil)
 }
 
 // Returns an slice of floats, or the specified slice
 // if the key doesn't exist or isn't a valid []float64
-func (t Typed) FloatsOr(key string, d []float64) []float64 {
+func (t *Typed) FloatsOr(key string, d []float64) []float64 {
 	n, ok := t.FloatsIf(key)
 	if ok {
 		return n
@@ -593,8 +629,8 @@ func (t Typed) FloatsOr(key string, d []float64) []float64 {
 // Returns a float slice + true if valid
 // Returns nil + false otherwise
 // (returns nil+false if one of the values is not a valid float)
-func (t Typed) FloatsIf(key string) ([]float64, bool) {
-	value, exists := t[key]
+func (t *Typed) FloatsIf(key string) ([]float64, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -624,13 +660,13 @@ func (t Typed) FloatsIf(key string) ([]float64, bool) {
 }
 
 // Returns an slice of strings, or a nil slice
-func (t Typed) Strings(key string) []string {
+func (t *Typed) Strings(key string) []string {
 	return t.StringsOr(key, nil)
 }
 
 // Returns an slice of strings, or the specified slice
 // if the key doesn't exist or isn't a valid []string
-func (t Typed) StringsOr(key string, d []string) []string {
+func (t *Typed) StringsOr(key string, d []string) []string {
 	n, ok := t.StringsIf(key)
 	if ok {
 		return n
@@ -641,8 +677,8 @@ func (t Typed) StringsOr(key string, d []string) []string {
 // Returns a string slice + true if valid
 // Returns nil + false otherwise
 // (returns nil+false if one of the values is not a valid string)
-func (t Typed) StringsIf(key string) ([]string, bool) {
-	value, exists := t[key]
+func (t *Typed) StringsIf(key string) ([]string, bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return nil, false
 	}
@@ -664,14 +700,14 @@ func (t Typed) StringsIf(key string) ([]string, bool) {
 }
 
 // Returns an slice of Typed helpers, or a nil slice
-func (t Typed) Objects(key string) []Typed {
+func (t *Typed) Objects(key string) []Typed {
 	value, _ := t.ObjectsIf(key)
 	return value
 }
 
 // Returns a slice of Typed helpers and true if exists, otherwise; nil and false.
-func (t Typed) ObjectsIf(key string) ([]Typed, bool) {
-	value, exists := t[key]
+func (t *Typed) ObjectsIf(key string) ([]Typed, bool) {
+	value, exists := t.GetIf(key)
 	if exists == true {
 		switch t := value.(type) {
 		case []interface{}:
@@ -700,7 +736,7 @@ func (t Typed) ObjectsIf(key string) ([]Typed, bool) {
 	return nil, false
 }
 
-func (t Typed) ObjectsMust(key string) []Typed {
+func (t *Typed) ObjectsMust(key string) []Typed {
 	value, exists := t.ObjectsIf(key)
 	if exists == false {
 		panic("expected objects value for " + key)
@@ -710,8 +746,8 @@ func (t Typed) ObjectsMust(key string) []Typed {
 }
 
 // Returns an slice of map[string]interfaces, or a nil slice
-func (t Typed) Maps(key string) []map[string]interface{} {
-	value, exists := t[key]
+func (t *Typed) Maps(key string) []map[string]interface{} {
+	value, exists := t.GetIf(key)
 	if exists == true {
 		if a, ok := value.([]interface{}); ok {
 			l := len(a)
@@ -726,7 +762,7 @@ func (t Typed) Maps(key string) []map[string]interface{} {
 }
 
 // Returns an map[string]bool
-func (t Typed) StringBool(key string) map[string]bool {
+func (t *Typed) StringBool(key string) map[string]bool {
 	raw, ok := t.getmap(key)
 	if ok == false {
 		return nil
@@ -741,7 +777,7 @@ func (t Typed) StringBool(key string) map[string]bool {
 // Returns an map[string]int
 // Some work is done to handle the fact that JSON ints
 // are represented as floats.
-func (t Typed) StringInt(key string) map[string]int {
+func (t *Typed) StringInt(key string) map[string]int {
 	raw, ok := t.getmap(key)
 	if ok == false {
 		return nil
@@ -765,7 +801,7 @@ func (t Typed) StringInt(key string) map[string]int {
 }
 
 // Returns an map[string]float64
-func (t Typed) StringFloat(key string) map[string]float64 {
+func (t *Typed) StringFloat(key string) map[string]float64 {
 	raw, ok := t.getmap(key)
 	if ok == false {
 		return nil
@@ -789,7 +825,7 @@ func (t Typed) StringFloat(key string) map[string]float64 {
 }
 
 // Returns an map[string]string
-func (t Typed) StringString(key string) map[string]string {
+func (t *Typed) StringString(key string) map[string]string {
 	raw, ok := t.getmap(key)
 	if ok == false {
 		return nil
@@ -802,14 +838,14 @@ func (t Typed) StringString(key string) map[string]string {
 }
 
 // Returns an map[string]Typed
-func (t Typed) StringObject(key string) map[string]Typed {
+func (t *Typed) StringObject(key string) map[string]*Typed {
 	raw, ok := t.getmap(key)
 	if ok == false {
 		return nil
 	}
-	m := make(map[string]Typed, len(raw))
+	m := make(map[string]*Typed, len(raw))
 	for k, value := range raw {
-		m[k] = Typed(value.(map[string]interface{}))
+		m[k] = New(value.(map[string]interface{}))
 	}
 	return m
 }
@@ -818,13 +854,13 @@ func (t Typed) StringObject(key string) map[string]Typed {
 // If key isn't valid, KeyNotFound is returned.
 // If the typed doesn't represent valid JSON, a relevant
 // JSON error is returned
-func (t Typed) ToBytes(key string) ([]byte, error) {
+func (t *Typed) ToBytes(key string) ([]byte, error) {
 	var o interface{}
 	if len(key) == 0 {
 		o = t
 	} else {
 		exists := false
-		o, exists = t[key]
+		o, exists = t.GetIf(key)
 		if exists == false {
 			return nil, KeyNotFound
 		}
@@ -839,7 +875,7 @@ func (t Typed) ToBytes(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (t Typed) MustBytes(key string) []byte {
+func (t *Typed) MustBytes(key string) []byte {
 	data, err := t.ToBytes(key)
 	if err != nil {
 		panic(err)
@@ -847,8 +883,8 @@ func (t Typed) MustBytes(key string) []byte {
 	return data
 }
 
-func (t Typed) Exists(key string) bool {
-	_, exists := t[key]
+func (t *Typed) Exists(key string) bool {
+	_, exists := t.GetIf(key)
 	return exists
 }
 
@@ -889,8 +925,8 @@ func (t *Typed) Set(key string, v interface{}) *Typed {
 	return t
 }
 
-func (t Typed) getmap(key string) (raw map[string]interface{}, exists bool) {
-	value, exists := t[key]
+func (t *Typed) getmap(key string) (raw map[string]interface{}, exists bool) {
+	value, exists := t.GetIf(key)
 	if exists == false {
 		return
 	}
