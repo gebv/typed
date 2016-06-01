@@ -22,9 +22,11 @@ var (
 type Typed map[string]interface{}
 
 // Wrap the map into a Typed
-func New(m map[string]interface{}) *Typed {
-	_m := Typed(m)
-	return &_m 
+func New(v interface{}) *Typed {
+	var _m = Typed(map[string]interface{}{})
+	_m.LoadFrom(v)
+	
+	return &_m
 }
 
 // Create a Typed helper from the given JSON bytes
@@ -388,6 +390,10 @@ func (t *Typed) ObjectIf(key string) (*Typed, bool) {
 		return t, true
 	case Typed:
 		return &t, true
+	case map[interface{}]interface{}:
+		return New(t), true
+	default:
+		fmt.Printf("not supported %T\n", value)
 	}
 	return nil, false
 }
@@ -893,6 +899,10 @@ func (t *Typed) LoadFrom(v interface{}) (*Typed, error) {
 	case map[string]interface{}:
 		for key, value := range v.(map[string]interface{}) {
 			t.Set(key, value)
+		}
+	case map[interface{}]interface{}:
+		for key, value := range v.(map[interface{}]interface{}) {
+			t.Set(key.(string), value)
 		}
 	case *Typed:
 		for key, value := range *v.(*Typed) {
