@@ -457,6 +457,12 @@ func (t *Typed) MapIf(key string) (map[string]interface{}, bool) {
 	if n, ok := value.(map[string]interface{}); ok {
 		return n, true
 	}
+	if n, ok := value.(Typed); ok {
+		return map[string]interface{}(n), true
+	}
+	if n, ok := value.(*Typed); ok {
+		return map[string]interface{}(*n), true
+	}
 	return nil, false
 }
 
