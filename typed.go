@@ -2,6 +2,8 @@ package typed
 
 import (
 	"encoding/json"
+	"gopkg.in/vmihailenco/msgpack.v2"
+	"bytes"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -20,6 +22,44 @@ var (
 
 // A Typed type helper for accessing a map
 type Typed map[string]interface{}
+
+func (m *Typed) UnmarshalMsgpack(b []byte) error {
+	buf := bytes.NewBuffer(b)
+
+	dec := msgpack.NewDecoder(buf)
+	dec.DecodeMapFunc = func(d *msgpack.Decoder) (interface{}, error) {
+		n, err := d.DecodeMapLen()
+		if err != nil {
+			return nil, err
+		}
+
+		m := make(map[string]interface{}, n)
+		for i := 0; i < n; i++ {
+			mk, err := d.DecodeString()
+			if err != nil {
+				return nil, err
+			}
+
+			mv, err := d.DecodeInterface()
+			if err != nil {
+				return nil, err
+			}
+
+			m[mk] = mv
+		}
+		return m, nil
+	}
+
+	out, err := dec.DecodeInterface()
+
+	if err != nil {
+		return err
+	}
+
+	m.LoadFrom(out)
+
+	return nil
+}
 
 // Wrap the map into a Typed
 func New(v interface{}) *Typed {
